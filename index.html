@@ -68,14 +68,6 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
 .scanner{position:fixed;inset:0;background:rgba(16,42,67,.95);z-index:10;display:grid;place-items:center;padding:16px}
 .sbox{width:min(520px,100%);display:grid;gap:12px;color:#fff;text-align:center}
 .sbox video{width:100%;max-height:60vh;border-radius:16px;background:#000;object-fit:cover}
-.camBox{position:relative;height:170px;border-radius:14px;overflow:hidden;background:#000;margin-bottom:12px}
-.camBox video{width:100%;height:100%;object-fit:cover;display:block}
-.aim{position:absolute;inset:16% 8%;border:2px solid rgba(255,255,255,.85);border-radius:10px;pointer-events:none}
-.aim::after{content:"";position:absolute;left:5%;right:5%;top:50%;height:2px;background:var(--red);animation:sweep 1.5s ease-in-out infinite alternate}
-@keyframes sweep{from{top:12%}to{top:88%}}
-.camStop{position:absolute;top:8px;inset-inline-start:8px;padding:6px 14px;font-size:12px;border-radius:999px;background:rgba(16,42,67,.78)}
-.camTip{position:absolute;bottom:6px;left:0;right:0;text-align:center;color:#fff;font-size:12px;text-shadow:0 1px 3px #000;pointer-events:none}
-.cam.on{background:var(--teal);color:#fff;border-color:var(--teal)}
 .foot{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 @media(max-width:650px){.item{grid-template-columns:1fr}.pic{width:100%;height:180px}}
 </style>
@@ -88,12 +80,6 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
   </header>
 
   <div class="panel">
-    <div id="camBox" class="camBox hidden">
-      <video id="video" playsinline muted autoplay></video>
-      <div class="aim"></div>
-      <button id="closeCam" class="camStop" type="button">إيقاف الكاميرا ✕</button>
-      <div class="camTip">وجّه الكاميرا نحو الباركود</div>
-    </div>
     <div class="row">
       <div class="box">
         <input id="q" type="search" inputmode="search" autocomplete="off" aria-label="بحث" placeholder="باركود أو SKU أو اسم المنتج">
@@ -113,8 +99,16 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
   </div>
 
   <div id="results" class="results"></div>
-  <p class="foot">StockScan v10.8</p>
+  <p class="foot">StockScan v10.9</p>
 </main>
+
+<div id="scanner" class="scanner hidden" role="dialog" aria-label="مسح الباركود">
+  <div class="sbox">
+    <video id="video" playsinline muted></video>
+    <div>وجّه الكاميرا نحو الباركود</div>
+    <button id="closeCam" type="button">إغلاق الكاميرا</button>
+  </div>
+</div>
 
 <div id="gate" class="scanner hidden" role="dialog" aria-label="طلب الأذونات">
   <div class="gcard">
@@ -185,7 +179,6 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
           c.textContent = 'إعداد ناقص'; c.className = 'conn bad';
           setMsg('إعدادات ناقصة في Script Properties: ' + r.missing.join('، '), true);
         } else { c.textContent = 'متصل ✓ v' + r.version; c.className = 'conn ok'; }
-        if (!stream) openCam();
         })
       .catch(function (e) {
         done = true; clearTimeout(t);
@@ -322,23 +315,27 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
       document.head.appendChild(s);
     });
   }
-  var lastCode = '', lastCodeAt = 0, opening = false, wasOn = false;
+  var opening = false;
   function openCam() {
     $('camMsg').classList.add('hidden');
     if (stream || opening) return;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return camErr('المتصفح لا يدعم الكاميرا. استخدم الإدخال اليدوي.');
     opening = true;
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }).then(function (s) {
+    // دقة أعلى + تركيز تلقائي مستمر لتحسين قراءة الباركود
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }).then(function (s) {
       opening = false;
-      if (stream) { stopStream(s); return; }
       stream = s; var v = $('video'); v.srcObject = s;
-      $('camBox').classList.remove('hidden'); $('camBtn').classList.add('on');
+      try {
+        var tr = s.getVideoTracks()[0], caps = tr.getCapabilities ? tr.getCapabilities() : {};
+        if (caps.focusMode && caps.focusMode.indexOf('continuous') > -1) tr.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(function () {});
+      } catch (e) {}
+      $('scanner').classList.remove('hidden');
       var p = v.play(); if (p && p.catch) p.catch(function () {});
       if ('BarcodeDetector' in window) {
         var det = new BarcodeDetector();
         var tick = function () {
           if (!stream) return;
-          det.detect(v).then(function (codes) { if (codes.length) scanned(codes[0].rawValue); raf = setTimeout(tick, 150); })
+          det.detect(v).then(function (codes) { if (codes.length) scanned(codes[0].rawValue); else raf = setTimeout(tick, 120); })
             .catch(function () { raf = setTimeout(tick, 250); });
         };
         tick();
@@ -353,11 +350,8 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
       opening = false; showPerm('camera', e, openCam);
     });
   }
-  // تبقى الكاميرا مفتوحة بعد القراءة، ويُتجاهل تكرار الباركود نفسه خلال 3 ثوانٍ.
   function scanned(code) {
-    var now = Date.now();
-    if (code === lastCode && now - lastCodeAt < 3000) { lastCodeAt = now; return; }
-    lastCode = code; lastCodeAt = now;
+    closeCam();
     $('q').value = code; lastAuto = code;
     if (navigator.vibrate) navigator.vibrate(80);
     search();
@@ -366,13 +360,9 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
     clearTimeout(raf);
     if (zx) { try { zx.reset(); } catch (e) {} zx = null; }
     if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
-    $('video').srcObject = null; $('camBox').classList.add('hidden'); $('camBtn').classList.remove('on');
+    $('video').srcObject = null; $('scanner').classList.add('hidden');
   }
-  // توفير للبطارية: إيقاف الكاميرا عند مغادرة الصفحة وإعادتها عند العودة
-  document.addEventListener('visibilitychange', function () {
-    if (document.hidden) { wasOn = !!stream; closeCam(); }
-    else if (wasOn) { wasOn = false; openCam(); }
-  });
+  document.addEventListener('visibilitychange', function () { if (document.hidden) closeCam(); });
 
   /* ---- البحث الصوتي ---- */
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition, rec = null, listening = false, heard = '';
@@ -485,7 +475,7 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
 
   /* ---- تشغيل ---- */
   $('goBtn').addEventListener('click', function () { search(); });
-  $('camBtn').addEventListener('click', function () { if (stream) closeCam(); else openCam(); });
+  $('camBtn').addEventListener('click', openCam);
   $('micBtn').addEventListener('click', toggleVoice);
   $('closeCam').addEventListener('click', closeCam);
   $('q').addEventListener('input', autoSearch);
