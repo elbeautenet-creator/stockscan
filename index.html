@@ -121,7 +121,7 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
   var LOW = 5;
   var CUR = { SAR: 'ر.س', EGP: 'ج.م', USD: '$', AED: 'د.إ' };
   var $ = function (id) { return document.getElementById(id); };
-  var API_URL = 'ضع_هنا_رابط_النشر_الذي_ينتهي_بـ_/exec';
+  var API_URL = 'https://script.google.com/macros/s/AKfycbw9uxGH94-BVrlRkwkiDkIWhY5m5fIT9rEr_7gozGbq5gWEcCr179lh5TYxRg0Vja3TZw/exec';
   function api(action, q) {
     var url = API_URL + '?action=' + action + (q != null ? '&q=' + encodeURIComponent(q) : '');
     return fetch(url).then(function (r) { return r.json(); }).then(function (j) {
