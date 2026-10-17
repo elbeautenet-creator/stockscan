@@ -92,7 +92,7 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
   </div>
 
   <div id="results" class="results"></div>
-  <p class="foot">StockScan v10.4</p>
+  <p class="foot">StockScan v10.5</p>
 </main>
 
 <div id="scanner" class="scanner hidden" role="dialog" aria-label="مسح الباركود">
@@ -115,6 +115,16 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
   </div>
 </div>
 
+<div id="login" class="scanner hidden" role="dialog" aria-label="رمز الدخول">
+  <div class="gcard">
+    <h2>رمز الدخول</h2>
+    <p>أدخل رمز الدخول للمتابعة.</p>
+    <div id="loginErr" class="gerr hidden"></div>
+    <input id="codeIn" type="password" autocomplete="current-password" placeholder="رمز الدخول" aria-label="رمز الدخول">
+    <button id="loginBtn" type="button">دخول</button>
+  </div>
+</div>
+
 <script>
 (function () {
   'use strict';
@@ -122,10 +132,11 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
   var CUR = { SAR: 'ر.س', EGP: 'ج.م', USD: '$', AED: 'د.إ' };
   var $ = function (id) { return document.getElementById(id); };
   var API_URL = 'https://script.google.com/macros/s/AKfycbw9uxGH94-BVrlRkwkiDkIWhY5m5fIT9rEr_7gozGbq5gWEcCr179lh5TYxRg0Vja3TZw/exec';
+  function getCode() { try { return localStorage.getItem('ss_code') || ''; } catch (e) { return ''; } }
   function api(action, q) {
-    var url = API_URL + '?action=' + action + (q != null ? '&q=' + encodeURIComponent(q) : '');
+    var url = API_URL + '?action=' + action + '&code=' + encodeURIComponent(getCode()) + (q != null ? '&q=' + encodeURIComponent(q) : '');
     return fetch(url).then(function (r) { return r.json(); }).then(function (j) {
-      if (!j.ok) throw new Error(j.error || 'خطأ في الخادم');
+      if (!j.ok) { var er = new Error(j.error || 'خطأ في الخادم'); if (j.error === 'AUTH') er.auth = true; throw er; }
       return j.data;
     });
   }
@@ -164,6 +175,7 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
         })
       .catch(function (e) {
         done = true; clearTimeout(t);
+        if (e && e.auth) { c.textContent = 'يلزم رمز الدخول'; c.className = 'conn bad'; return showLogin(); }
         c.textContent = 'خطأ في الخادم'; c.className = 'conn bad';
         setMsg((e && e.message) || 'تعذر الاتصال بالخادم.', true);
       });
@@ -184,7 +196,9 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
       })
       .catch(function (e) {
         if (id !== reqId) return;
-        $('goBtn').disabled = false; setMsg((e && e.message) || 'تعذر تنفيذ البحث.', true);
+        $('goBtn').disabled = false;
+        if (e && e.auth) { setMsg(''); return showLogin(); }
+        setMsg((e && e.message) || 'تعذر تنفيذ البحث.', true);
       });
   }
 
@@ -395,6 +409,26 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
   });
   $('gateSkip').addEventListener('click', gateDone);
 
+  /* ---- رمز الدخول ---- */
+  function showLogin(wrong) {
+    try { localStorage.removeItem('ss_code'); } catch (e) {}
+    var er = $('loginErr'); er.classList.toggle('hidden', !wrong); er.textContent = wrong ? 'الرمز غير صحيح.' : '';
+    $('login').classList.remove('hidden'); setTimeout(function () { $('codeIn').focus(); }, 50);
+  }
+  function doLogin() {
+    var v = $('codeIn').value.trim(); if (!v) return;
+    try { localStorage.setItem('ss_code', v); } catch (e) {}
+    $('loginBtn').disabled = true;
+    api('ping').then(function () {
+      $('login').classList.add('hidden'); $('codeIn').value = ''; checkConn();
+    }).catch(function (e) {
+      if (e && e.auth) showLogin(true);
+      else { var er = $('loginErr'); er.textContent = (e && e.message) || 'تعذر الاتصال بالخادم.'; er.classList.remove('hidden'); }
+    }).then(function () { $('loginBtn').disabled = false; });
+  }
+  $('loginBtn').addEventListener('click', doLogin);
+  $('codeIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
+
   /* ---- تشغيل ---- */
   $('goBtn').addEventListener('click', search);
   $('camBtn').addEventListener('click', openCam);
@@ -403,7 +437,7 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
   $('q').addEventListener('input', autoSearch);
   $('q').addEventListener('keydown', function (e) { if (e.key === 'Enter') search(); });
   window.addEventListener('error', function (e) { setMsg('خطأ في الصفحة: ' + (e.message || 'غير معروف'), true); });
-  renderHist(); checkConn(); maybeGate();
+  renderHist(); checkConn();
 })();
 </script>
 </body>
