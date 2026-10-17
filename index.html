@@ -67,7 +67,9 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
 .empty{text-align:center;color:var(--muted);padding:30px 10px}
 .scanner{position:fixed;inset:0;background:rgba(16,42,67,.95);z-index:10;display:grid;place-items:center;padding:16px}
 .sbox{width:min(960px,100%);display:grid;gap:12px;color:#fff;text-align:center}
-.sbox video{width:100%;height:76vh;max-height:76vh;border-radius:16px;background:#000;object-fit:cover}
+.sbox video{width:100%;height:62vh;max-height:62vh;border-radius:16px;background:#000;object-fit:cover}
+.sbtns{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.sbtns button{padding:10px 16px;font-size:14px}
 .foot{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 @media(max-width:650px){.item{grid-template-columns:1fr}.pic{width:100%;height:180px}}
 </style>
@@ -99,13 +101,18 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
   </div>
 
   <div id="results" class="results"></div>
-  <p class="foot">StockScan v10.10</p>
+  <p class="foot">StockScan v10.11</p>
 </main>
 
 <div id="scanner" class="scanner hidden" role="dialog" aria-label="مسح الباركود">
   <div class="sbox">
     <video id="video" playsinline muted></video>
-    <div>وجّه الكاميرا نحو الباركود</div>
+    <div>وجّه الكاميرا نحو الباركود وأبعد الهاتف قليلاً حتى يتضح</div>
+    <div class="sbtns">
+      <button id="swCam" class="hidden" type="button">تبديل الكاميرا</button>
+      <button id="zOut" class="hidden" type="button" aria-label="تبعيد">−</button>
+      <button id="zIn" class="hidden" type="button" aria-label="تقريب">+</button>
+    </div>
     <button id="closeCam" type="button">إغلاق الكاميرا</button>
   </div>
 </div>
@@ -315,40 +322,98 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
       document.head.appendChild(s);
     });
   }
-  var opening = false;
+  var opening = false, camList = [];
+  function getSaved() { try { return localStorage.getItem('ss_cam') || ''; } catch (e) { return ''; } }
+  function startStream(deviceId) {
+    var video = { width: { ideal: 1920 }, height: { ideal: 1080 } };
+    if (deviceId) video.deviceId = { exact: deviceId }; else video.facingMode = { ideal: 'environment' };
+    return navigator.mediaDevices.getUserMedia({ video: video, audio: false });
+  }
+  function backCams(list) {
+    var cams = list.filter(function (d) { return d.kind === 'videoinput'; });
+    var backs = cams.filter(function (d) { return /back|rear|environment/i.test(d.label); });
+    return backs.length ? backs : cams;
+  }
+  // يفضّل الكاميرا الرئيسية الخلفية، ويتجنب الواسعة جداً والمقرّبة (tele) وماكرو لأن تركيزها ضعيف عادةً.
+  function pickBest(s, hadSaved) {
+    if (hadSaved) return Promise.resolve(s);
+    return navigator.mediaDevices.enumerateDevices().then(function (list) {
+      var backs = backCams(list); camList = backs;
+      var good = backs.filter(function (d) { return !/ultra|tele|macro|depth/i.test(d.label); });
+      var best = good[0] || backs[0];
+      var cur = s.getVideoTracks()[0].getSettings().deviceId;
+      if (best && best.deviceId && best.deviceId !== cur) {
+        stopStream(s);
+        return startStream(best.deviceId).catch(function () { return startStream(); });
+      }
+      return s;
+    }).catch(function () { return s; });
+  }
+  function startDetect(v) {
+    if ('BarcodeDetector' in window) {
+      var det = new BarcodeDetector();
+      var tick = function () {
+        if (!stream) return;
+        det.detect(v).then(function (codes) { if (codes.length) scanned(codes[0].rawValue); else raf = setTimeout(tick, 120); })
+          .catch(function () { raf = setTimeout(tick, 250); });
+      };
+      tick();
+    } else {
+      loadZX().then(function () {
+        if (!stream) return;
+        zx = new ZXing.BrowserMultiFormatReader();
+        zx.decodeFromStream(stream, v, function (r) { if (r) scanned(r.getText()); });
+      }).catch(function () { closeCam(); camErr('تعذر تحميل قارئ الباركود. استخدم الإدخال اليدوي.'); });
+    }
+  }
+  function trackCaps() {
+    try { var tr = stream.getVideoTracks()[0]; return { tr: tr, caps: tr.getCapabilities ? tr.getCapabilities() : {} }; } catch (e) { return { tr: null, caps: {} }; }
+  }
+  function refreshControls() {
+    var c = trackCaps();
+    $('zIn').classList.toggle('hidden', !c.caps.zoom); $('zOut').classList.toggle('hidden', !c.caps.zoom);
+    navigator.mediaDevices.enumerateDevices().then(function (list) {
+      camList = backCams(list); $('swCam').classList.toggle('hidden', camList.length < 2);
+    }).catch(function () {});
+  }
+  function attach(s) {
+    opening = false;
+    stream = s; var v = $('video'); v.srcObject = s;
+    var c = trackCaps();
+    try { if (c.caps.focusMode && c.caps.focusMode.indexOf('continuous') > -1) c.tr.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(function () {}); } catch (e) {}
+    $('scanner').classList.remove('hidden');
+    var p = v.play(); if (p && p.catch) p.catch(function () {});
+    startDetect(v); refreshControls();
+  }
   function openCam() {
     $('camMsg').classList.add('hidden');
     if (stream || opening) return;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return camErr('المتصفح لا يدعم الكاميرا. استخدم الإدخال اليدوي.');
     opening = true;
-    // دقة أعلى + تركيز تلقائي مستمر لتحسين قراءة الباركود
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }).then(function (s) {
-      opening = false;
-      stream = s; var v = $('video'); v.srcObject = s;
-      try {
-        var tr = s.getVideoTracks()[0], caps = tr.getCapabilities ? tr.getCapabilities() : {};
-        if (caps.focusMode && caps.focusMode.indexOf('continuous') > -1) tr.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(function () {});
-      } catch (e) {}
-      $('scanner').classList.remove('hidden');
-      var p = v.play(); if (p && p.catch) p.catch(function () {});
-      if ('BarcodeDetector' in window) {
-        var det = new BarcodeDetector();
-        var tick = function () {
-          if (!stream) return;
-          det.detect(v).then(function (codes) { if (codes.length) scanned(codes[0].rawValue); else raf = setTimeout(tick, 120); })
-            .catch(function () { raf = setTimeout(tick, 250); });
-        };
-        tick();
-      } else {
-        loadZX().then(function () {
-          if (!stream) return;
-          zx = new ZXing.BrowserMultiFormatReader();
-          zx.decodeFromStream(stream, v, function (r) { if (r) scanned(r.getText()); });
-        }).catch(function () { closeCam(); camErr('تعذر تحميل قارئ الباركود. استخدم الإدخال اليدوي.'); });
-      }
-    }).catch(function (e) {
+    var saved = getSaved();
+    startStream(saved).catch(function (e) {
+      if (saved && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError')) { try { localStorage.removeItem('ss_cam'); } catch (x) {} saved = ''; return startStream(); }
+      throw e;
+    }).then(function (s) { return pickBest(s, !!saved); }).then(attach).catch(function (e) {
       opening = false; showPerm('camera', e, openCam);
     });
+  }
+  function switchCam() {
+    if (!stream || camList.length < 2) return;
+    var cur = stream.getVideoTracks()[0].getSettings().deviceId;
+    var i = camList.findIndex(function (d) { return d.deviceId === cur; });
+    var next = camList[(i + 1) % camList.length];
+    try { localStorage.setItem('ss_cam', next.deviceId); } catch (e) {}
+    clearTimeout(raf);
+    if (zx) { try { zx.reset(); } catch (e) {} zx = null; }
+    stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; opening = true;
+    startStream(next.deviceId).then(attach).catch(function (e) { opening = false; closeCam(); showPerm('camera', e, openCam); });
+  }
+  function zoomBy(dir) {
+    var c = trackCaps(), z = c.caps.zoom; if (!z || !c.tr) return;
+    var cur = (c.tr.getSettings().zoom) || z.min, st = Math.max(z.step || 0, (z.max - z.min) / 8);
+    var nv = Math.min(z.max, Math.max(z.min, cur + dir * st));
+    c.tr.applyConstraints({ advanced: [{ zoom: nv }] }).catch(function () {});
   }
   function scanned(code) {
     closeCam();
@@ -478,6 +543,9 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
   $('camBtn').addEventListener('click', openCam);
   $('micBtn').addEventListener('click', toggleVoice);
   $('closeCam').addEventListener('click', closeCam);
+  $('swCam').addEventListener('click', switchCam);
+  $('zIn').addEventListener('click', function () { zoomBy(1); });
+  $('zOut').addEventListener('click', function () { zoomBy(-1); });
   $('q').addEventListener('input', autoSearch);
   $('q').addEventListener('input', function () { var l = langOfText($('q').value); if (l && l !== vlang) setVlang(l); });
   $('langBtn').addEventListener('click', function () { setVlang(vlang === 'ar-SA' ? 'en-US' : 'ar-SA'); });
