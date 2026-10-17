@@ -113,7 +113,7 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
   </div>
 
   <div id="results" class="results"></div>
-  <p class="foot">StockScan v10.6</p>
+  <p class="foot">StockScan v10.8</p>
 </main>
 
 <div id="gate" class="scanner hidden" role="dialog" aria-label="طلب الأذونات">
@@ -196,21 +196,30 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
   }
 
   /* ---- البحث ---- */
-  function search() {
+  var memo = {};
+  // auto = true عند البحث أثناء الكتابة: لا يمسح النتائج الحالية ولا يُسجَّل في السجل.
+  function search(auto) {
     clearTimeout(timer);
     var q = $('q').value.trim();
     if (!q) return setMsg('أدخل قيمة للبحث.');
     if (!hasServer()) return setMsg('لم يُضبط رابط API_URL في الصفحة.', true);
-    var id = ++reqId;
-    $('results').innerHTML = ''; setMsg('جاري البحث في Shopify…'); $('goBtn').disabled = true;
+    var key = q.toLowerCase(), hit = memo[key], id = ++reqId;
+    if (hit && Date.now() - hit.t < 60000) {
+      $('goBtn').disabled = false; render(hit.d);
+      if (!auto && hit.d.products.length) addHist(q);
+      return;
+    }
+    if (!auto) $('results').innerHTML = '';
+    setMsg('جاري البحث في Shopify…'); $('goBtn').disabled = true;
     api('search', q).then(function (data) {
+        memo[key] = { t: Date.now(), d: data };
         if (id !== reqId) return;
         $('goBtn').disabled = false; render(data);
-        if (data.products.length) addHist(q);
+        if (!auto && data.products.length) addHist(q);
       })
       .catch(function (e) {
         if (id !== reqId) return;
-        $('goBtn').disabled = false;
+        $('goBtn').disabled = false; $('results').innerHTML = '';
         if (e && e.auth) { setMsg(''); return showLogin(); }
         setMsg((e && e.message) || 'تعذر تنفيذ البحث.', true);
       });
@@ -266,11 +275,13 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
     box.appendChild(c);
   }
 
+  // بحث فوري أثناء الكتابة: من أول حرف، بعد توقف قصير (450ms) عن الكتابة.
   function autoSearch() {
     clearTimeout(timer);
-    var v = $('q').value.trim(), min = /^[A-Za-z0-9._\-\/#]+$/.test(v) ? 5 : 3;
-    if (v.length < min || v === lastAuto) return;
-    timer = setTimeout(function () { if ($('q').value.trim() === v) { lastAuto = v; search(); } }, 800);
+    var v = $('q').value.trim();
+    if (!v) { reqId++; lastAuto = ''; $('results').innerHTML = ''; $('goBtn').disabled = false; return setMsg(''); }
+    if (v === lastAuto) return;
+    timer = setTimeout(function () { if ($('q').value.trim() === v) { lastAuto = v; search(true); } }, 450);
   }
 
   /* ---- الكاميرا ---- */
@@ -392,6 +403,7 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
   }
   function startVoice() {
     $('camMsg').classList.add('hidden'); heard = '';
+    $('q').value = ''; lastAuto = '';   // مسح البحث السابق تلقائياً قبل البحث الصوتي الجديد
     rec = new SR(); rec.lang = vlang; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
     rec.onstart = function () { listening = true; $('micBtn').classList.add('on'); setMsg('تحدّث الآن…'); };
     rec.onresult = function (e) {
@@ -472,7 +484,7 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
   $('codeIn').addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
 
   /* ---- تشغيل ---- */
-  $('goBtn').addEventListener('click', search);
+  $('goBtn').addEventListener('click', function () { search(); });
   $('camBtn').addEventListener('click', function () { if (stream) closeCam(); else openCam(); });
   $('micBtn').addEventListener('click', toggleVoice);
   $('closeCam').addEventListener('click', closeCam);
