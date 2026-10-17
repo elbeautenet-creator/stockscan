@@ -5,10 +5,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>StockScan | فحص المخزون</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
 <style>
 :root{--ink:#102a43;--muted:#627d98;--bg:#f6f9fc;--card:#fff;--line:#d9e2ec;--teal:#087f8c;--teal2:#05636d;--red:#c53030;--amber:#b7791f;--green:#2f855a}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Tahoma,sans-serif}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Tajawal',Tahoma,Arial,sans-serif}
+button,input,select{font-family:inherit}
 .shell{width:min(960px,calc(100% - 24px));margin:0 auto;padding:20px 0 40px}
 header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
 h1{font-size:22px;margin:0}
@@ -16,12 +20,14 @@ h1{font-size:22px;margin:0}
 .conn.ok{color:var(--green);border-color:#c6f6d5;background:#f0fff4}
 .conn.bad{color:var(--red);border-color:#fed7d7;background:#fff5f5}
 .panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 10px 30px rgba(16,42,67,.08)}
-.row{display:flex;gap:10px;align-items:stretch}
-.box{position:relative;flex:1}
-.box input{padding-inline-end:106px}
+.row{display:flex;flex-direction:column;gap:10px}
+#goBtn{width:100%}
+.box{position:relative;width:100%}
+.box input{padding-inline-end:156px}
 .cam{position:absolute;inset-block:6px;inset-inline-end:6px;width:44px;padding:0;display:grid;place-items:center;background:#f0f4f8;color:var(--teal2);border:1px solid var(--line);border-radius:10px}
 .cam:hover{background:#e2eaf1}.cam svg{width:22px;height:22px}
 .mic{inset-inline-end:56px}
+.lang{inset-inline-end:106px;font-size:12px;font-weight:800;letter-spacing:.3px}
 .mic.on{background:var(--red);color:#fff;border-color:var(--red);animation:pulse 1.1s infinite}
 @keyframes pulse{50%{opacity:.6}}
 label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
@@ -62,6 +68,14 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
 .scanner{position:fixed;inset:0;background:rgba(16,42,67,.95);z-index:10;display:grid;place-items:center;padding:16px}
 .sbox{width:min(520px,100%);display:grid;gap:12px;color:#fff;text-align:center}
 .sbox video{width:100%;max-height:60vh;border-radius:16px;background:#000;object-fit:cover}
+.camBox{position:relative;height:170px;border-radius:14px;overflow:hidden;background:#000;margin-bottom:12px}
+.camBox video{width:100%;height:100%;object-fit:cover;display:block}
+.aim{position:absolute;inset:16% 8%;border:2px solid rgba(255,255,255,.85);border-radius:10px;pointer-events:none}
+.aim::after{content:"";position:absolute;left:5%;right:5%;top:50%;height:2px;background:var(--red);animation:sweep 1.5s ease-in-out infinite alternate}
+@keyframes sweep{from{top:12%}to{top:88%}}
+.camStop{position:absolute;top:8px;inset-inline-start:8px;padding:6px 14px;font-size:12px;border-radius:999px;background:rgba(16,42,67,.78)}
+.camTip{position:absolute;bottom:6px;left:0;right:0;text-align:center;color:#fff;font-size:12px;text-shadow:0 1px 3px #000;pointer-events:none}
+.cam.on{background:var(--teal);color:#fff;border-color:var(--teal)}
 .foot{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
 @media(max-width:650px){.item{grid-template-columns:1fr}.pic{width:100%;height:180px}}
 </style>
@@ -74,9 +88,16 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
   </header>
 
   <div class="panel">
+    <div id="camBox" class="camBox hidden">
+      <video id="video" playsinline muted autoplay></video>
+      <div class="aim"></div>
+      <button id="closeCam" class="camStop" type="button">إيقاف الكاميرا ✕</button>
+      <div class="camTip">وجّه الكاميرا نحو الباركود</div>
+    </div>
     <div class="row">
       <div class="box">
         <input id="q" type="search" inputmode="search" autocomplete="off" aria-label="بحث" placeholder="باركود أو SKU أو اسم المنتج">
+        <button id="langBtn" class="cam lang" type="button" aria-label="لغة البحث الصوتي" title="لغة البحث الصوتي">ع</button>
         <button id="micBtn" class="cam mic" type="button" aria-label="بحث صوتي" title="بحث صوتي">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
         </button>
@@ -92,16 +113,8 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
   </div>
 
   <div id="results" class="results"></div>
-  <p class="foot">StockScan v10.5</p>
+  <p class="foot">StockScan v10.6</p>
 </main>
-
-<div id="scanner" class="scanner hidden" role="dialog" aria-label="مسح الباركود">
-  <div class="sbox">
-    <video id="video" playsinline muted></video>
-    <div>وجّه الكاميرا نحو الباركود</div>
-    <button id="closeCam" type="button">إغلاق الكاميرا</button>
-  </div>
-</div>
 
 <div id="gate" class="scanner hidden" role="dialog" aria-label="طلب الأذونات">
   <div class="gcard">
@@ -172,6 +185,7 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
           c.textContent = 'إعداد ناقص'; c.className = 'conn bad';
           setMsg('إعدادات ناقصة في Script Properties: ' + r.missing.join('، '), true);
         } else { c.textContent = 'متصل ✓ v' + r.version; c.className = 'conn ok'; }
+        if (!stream) openCam();
         })
       .catch(function (e) {
         done = true; clearTimeout(t);
@@ -297,43 +311,57 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
       document.head.appendChild(s);
     });
   }
+  var lastCode = '', lastCodeAt = 0, opening = false, wasOn = false;
   function openCam() {
     $('camMsg').classList.add('hidden');
+    if (stream || opening) return;
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return camErr('المتصفح لا يدعم الكاميرا. استخدم الإدخال اليدوي.');
+    opening = true;
     navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }).then(function (s) {
+      opening = false;
+      if (stream) { stopStream(s); return; }
       stream = s; var v = $('video'); v.srcObject = s;
-      $('scanner').classList.remove('hidden');
+      $('camBox').classList.remove('hidden'); $('camBtn').classList.add('on');
       var p = v.play(); if (p && p.catch) p.catch(function () {});
       if ('BarcodeDetector' in window) {
         var det = new BarcodeDetector();
         var tick = function () {
           if (!stream) return;
-          det.detect(v).then(function (codes) { if (codes.length) scanned(codes[0].rawValue); else raf = requestAnimationFrame(tick); })
-            .catch(function () { raf = requestAnimationFrame(tick); });
+          det.detect(v).then(function (codes) { if (codes.length) scanned(codes[0].rawValue); raf = setTimeout(tick, 150); })
+            .catch(function () { raf = setTimeout(tick, 250); });
         };
         tick();
       } else {
         loadZX().then(function () {
+          if (!stream) return;
           zx = new ZXing.BrowserMultiFormatReader();
           zx.decodeFromStream(stream, v, function (r) { if (r) scanned(r.getText()); });
         }).catch(function () { closeCam(); camErr('تعذر تحميل قارئ الباركود. استخدم الإدخال اليدوي.'); });
       }
     }).catch(function (e) {
-      showPerm('camera', e, openCam);
+      opening = false; showPerm('camera', e, openCam);
     });
   }
+  // تبقى الكاميرا مفتوحة بعد القراءة، ويُتجاهل تكرار الباركود نفسه خلال 3 ثوانٍ.
   function scanned(code) {
-    closeCam();
+    var now = Date.now();
+    if (code === lastCode && now - lastCodeAt < 3000) { lastCodeAt = now; return; }
+    lastCode = code; lastCodeAt = now;
     $('q').value = code; lastAuto = code;
     if (navigator.vibrate) navigator.vibrate(80);
     search();
   }
   function closeCam() {
-    cancelAnimationFrame(raf);
+    clearTimeout(raf);
     if (zx) { try { zx.reset(); } catch (e) {} zx = null; }
     if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
-    $('video').srcObject = null; $('scanner').classList.add('hidden');
+    $('video').srcObject = null; $('camBox').classList.add('hidden'); $('camBtn').classList.remove('on');
   }
+  // توفير للبطارية: إيقاف الكاميرا عند مغادرة الصفحة وإعادتها عند العودة
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) { wasOn = !!stream; closeCam(); }
+    else if (wasOn) { wasOn = false; openCam(); }
+  });
 
   /* ---- البحث الصوتي ---- */
   var SR = window.SpeechRecognition || window.webkitSpeechRecognition, rec = null, listening = false, heard = '';
@@ -343,6 +371,20 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
          .replace(/[.,،؟?!]+$/, '').trim();
     return /^[0-9\s]+$/.test(t) ? t.replace(/\s+/g, '') : t;
   }
+  var vlang = 'en-US';
+  try { vlang = localStorage.getItem('ss_vlang2') || 'en-US'; } catch (e) {}
+  function setVlang(l) {
+    vlang = l; try { localStorage.setItem('ss_vlang2', l); } catch (e) {}
+    $('langBtn').textContent = l === 'ar-SA' ? 'ع' : 'EN';
+  }
+  // آخر حرف (عربي/لاتيني) في المربع يحدد لغة لوحة المفاتيح المستخدمة
+  function langOfText(t) {
+    for (var i = t.length - 1; i >= 0; i--) {
+      if (/[\u0600-\u06FF]/.test(t[i])) return 'ar-SA';
+      if (/[A-Za-z]/.test(t[i])) return 'en-US';
+    }
+    return null;
+  }
   function toggleVoice() {
     if (!SR) return camErr('المتصفح لا يدعم البحث الصوتي. استخدم Chrome أو Safari، أو زر الميكروفون في لوحة مفاتيح الجوال.');
     if (listening && rec) { rec.stop(); return; }
@@ -350,7 +392,7 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
   }
   function startVoice() {
     $('camMsg').classList.add('hidden'); heard = '';
-    rec = new SR(); rec.lang = 'ar-SA'; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+    rec = new SR(); rec.lang = vlang; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
     rec.onstart = function () { listening = true; $('micBtn').classList.add('on'); setMsg('تحدّث الآن…'); };
     rec.onresult = function (e) {
       var t = ''; for (var i = 0; i < e.results.length; i++) t += e.results[i][0].transcript + ' ';
@@ -431,10 +473,13 @@ a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);fo
 
   /* ---- تشغيل ---- */
   $('goBtn').addEventListener('click', search);
-  $('camBtn').addEventListener('click', openCam);
+  $('camBtn').addEventListener('click', function () { if (stream) closeCam(); else openCam(); });
   $('micBtn').addEventListener('click', toggleVoice);
   $('closeCam').addEventListener('click', closeCam);
   $('q').addEventListener('input', autoSearch);
+  $('q').addEventListener('input', function () { var l = langOfText($('q').value); if (l && l !== vlang) setVlang(l); });
+  $('langBtn').addEventListener('click', function () { setVlang(vlang === 'ar-SA' ? 'en-US' : 'ar-SA'); });
+  setVlang(vlang);
   $('q').addEventListener('keydown', function (e) { if (e.key === 'Enter') search(); });
   window.addEventListener('error', function (e) { setMsg('خطأ في الصفحة: ' + (e.message || 'غير معروف'), true); });
   renderHist(); checkConn();
