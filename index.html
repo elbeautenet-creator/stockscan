@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StockScan | فحص المخزون</title>
+<style>
+:root{--ink:#102a43;--muted:#627d98;--bg:#f6f9fc;--card:#fff;--line:#d9e2ec;--teal:#087f8c;--teal2:#05636d;--red:#c53030;--amber:#b7791f;--green:#2f855a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Arial,Tahoma,sans-serif}
+.shell{width:min(960px,calc(100% - 24px));margin:0 auto;padding:20px 0 40px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px}
+h1{font-size:22px;margin:0}
+.conn{font-size:12px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);background:#fff;color:var(--muted)}
+.conn.ok{color:var(--green);border-color:#c6f6d5;background:#f0fff4}
+.conn.bad{color:var(--red);border-color:#fed7d7;background:#fff5f5}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 10px 30px rgba(16,42,67,.08)}
+.row{display:flex;gap:10px;align-items:stretch}
+.box{position:relative;flex:1}
+.box input{padding-inline-end:106px}
+.cam{position:absolute;inset-block:6px;inset-inline-end:6px;width:44px;padding:0;display:grid;place-items:center;background:#f0f4f8;color:var(--teal2);border:1px solid var(--line);border-radius:10px}
+.cam:hover{background:#e2eaf1}.cam svg{width:22px;height:22px}
+.mic{inset-inline-end:56px}
+.mic.on{background:var(--red);color:#fff;border-color:var(--red);animation:pulse 1.1s infinite}
+@keyframes pulse{50%{opacity:.6}}
+label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
+input,select{width:100%;border:1px solid var(--line);border-radius:12px;padding:13px;font-size:16px;background:#fff;color:var(--ink)}
+input:focus,select:focus{outline:2px solid rgba(8,127,140,.35);border-color:var(--teal)}
+button{border:0;border-radius:12px;padding:13px 18px;background:var(--teal);color:#fff;font-size:15px;font-weight:700;cursor:pointer}
+button:hover{background:var(--teal2)}button:disabled{opacity:.55;cursor:wait}
+button.ghost{background:#f0f4f8;color:var(--ink);border:1px solid var(--line)}
+.hidden{display:none!important}
+.gcard{background:#fff;color:var(--ink);border-radius:20px;padding:26px 22px;max-width:420px;width:100%;text-align:center;display:grid;gap:12px}
+.gcard h2{margin:0;font-size:20px}.gcard p{margin:0;color:var(--muted);line-height:1.8;font-size:14px}
+.gcard .perm{justify-content:center}.gerr{color:var(--red);background:#fff5f5;border:1px solid #fed7d7;border-radius:10px;padding:10px;font-size:13px;line-height:1.7}
+.skip{background:none!important;color:var(--muted)!important;border:0!important;text-decoration:underline}
+.perm{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.perm button,.perm a{font-size:13px;padding:8px 12px;border-radius:10px;text-decoration:none;background:var(--teal);color:#fff;border:0;cursor:pointer;font-weight:700}.perm .alt{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.msg{margin-top:14px;font-size:14px;color:var(--muted);min-height:20px}
+.msg.err{color:var(--red);background:#fff5f5;border:1px solid #fed7d7;border-radius:10px;padding:10px 12px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;align-items:center;font-size:12px;color:var(--muted)}
+.chip{padding:6px 12px;border-radius:999px;font-size:12px}
+.results{display:grid;gap:14px;margin-top:18px}
+.item{display:grid;grid-template-columns:110px 1fr;gap:18px}
+.pic{width:110px;height:110px;border-radius:14px;object-fit:cover;background:#edf2f7;display:grid;place-items:center;font-size:12px;color:var(--muted)}
+.item h2{font-size:20px;margin:0 0 4px}.var{color:var(--muted);margin:0 0 10px;font-size:14px}
+.pills{display:flex;flex-wrap:wrap;gap:8px}
+.pill{background:#f0f4f8;border:1px solid #e2e8f0;border-radius:999px;padding:6px 10px;font-size:12px}
+.pill.ok{background:#f0fff4;border-color:#c6f6d5;color:var(--green)}
+.pill.low{background:#fffaf0;border-color:#feebc8;color:var(--amber)}
+.pill.out{background:#fff5f5;border-color:#fed7d7;color:var(--red)}
+.prices{display:flex;align-items:baseline;flex-wrap:wrap;gap:10px;margin:10px 0}
+.price{font-size:24px;font-weight:800;color:var(--teal)}.old{text-decoration:line-through;color:var(--muted)}
+.off{background:var(--red);color:#fff;border-radius:8px;padding:2px 8px;font-size:12px;font-weight:700}
+.locs{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;border-top:1px solid var(--line);padding-top:12px;margin-top:8px}
+.loc{border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:flex;justify-content:space-between;gap:8px;align-items:center;font-size:13px}
+.loc strong{font-size:18px}
+.loc.low{background:#fffaf0;border-color:#feebc8}.loc.low strong{color:var(--amber)}
+.loc.out{background:#fff5f5;border-color:#fed7d7}.loc.out strong{color:var(--red)}
+a.link{display:inline-block;margin-top:12px;font-size:13px;color:var(--teal2);font-weight:700}
+.empty{text-align:center;color:var(--muted);padding:30px 10px}
+.scanner{position:fixed;inset:0;background:rgba(16,42,67,.95);z-index:10;display:grid;place-items:center;padding:16px}
+.sbox{width:min(520px,100%);display:grid;gap:12px;color:#fff;text-align:center}
+.sbox video{width:100%;max-height:60vh;border-radius:16px;background:#000;object-fit:cover}
+.foot{text-align:center;color:var(--muted);font-size:12px;margin-top:20px}
+@media(max-width:650px){.item{grid-template-columns:1fr}.pic{width:100%;height:180px}}
+</style>
+</head>
+<body>
+<main class="shell">
+  <header>
+    <h1>StockScan · فحص المخزون</h1>
+    <span id="conn" class="conn">جارٍ فحص الاتصال…</span>
+  </header>
+
+  <div class="panel">
+    <div class="row">
+      <div class="box">
+        <input id="q" type="search" inputmode="search" autocomplete="off" aria-label="بحث" placeholder="باركود أو SKU أو اسم المنتج">
+        <button id="micBtn" class="cam mic" type="button" aria-label="بحث صوتي" title="بحث صوتي">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>
+        </button>
+        <button id="camBtn" class="cam" type="button" aria-label="مسح بالكاميرا" title="مسح بالكاميرا">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M7 9v6M10 9v6M13 9v6M17 9v6"/></svg>
+        </button>
+      </div>
+      <button id="goBtn" type="button">بحث</button>
+    </div>
+    <div id="camMsg" class="msg err hidden"></div>
+    <div id="hist" class="chips hidden"></div>
+    <div id="msg" class="msg" aria-live="polite"></div>
+  </div>
+
+  <div id="results" class="results"></div>
+  <p class="foot">StockScan v10.4</p>
+</main>
+
+<div id="scanner" class="scanner hidden" role="dialog" aria-label="مسح الباركود">
+  <div class="sbox">
+    <video id="video" playsinline muted></video>
+    <div>وجّه الكاميرا نحو الباركود</div>
+    <button id="closeCam" type="button">إغلاق الكاميرا</button>
+  </div>
+</div>
+
+<div id="gate" class="scanner hidden" role="dialog" aria-label="طلب الأذونات">
+  <div class="gcard">
+    <h2>السماح بالكاميرا والميكروفون</h2>
+    <p>لمسح الباركود بالكاميرا والبحث بالصوت، يحتاج التطبيق إذنك. اضغط «السماح» ثم وافق في نافذة المتصفح.</p>
+    <div id="gateErr" class="gerr hidden"></div>
+    <div class="perm" style="justify-content:center">
+      <button id="gateAllow" type="button">السماح</button>
+    </div>
+    <button id="gateSkip" class="skip" type="button">متابعة بدون الآن</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  var LOW = 5;
+  var CUR = { SAR: 'ر.س', EGP: 'ج.م', USD: '$', AED: 'د.إ' };
+  var $ = function (id) { return document.getElementById(id); };
+  var API_URL = 'ضع_هنا_رابط_النشر_الذي_ينتهي_بـ_/exec';
+  function api(action, q) {
+    var url = API_URL + '?action=' + action + (q != null ? '&q=' + encodeURIComponent(q) : '');
+    return fetch(url).then(function (r) { return r.json(); }).then(function (j) {
+      if (!j.ok) throw new Error(j.error || 'خطأ في الخادم');
+      return j.data;
+    });
+  }
+  var appUrl = location.href, reqId = 0, timer = null, lastAuto = '', stream = null, raf = 0, zx = null;
+
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function setMsg(t, isErr) { var m = $('msg'); m.textContent = t || ''; m.className = 'msg' + (isErr ? ' err' : ''); }
+  function num(n) { return Number(n).toLocaleString('en-US'); }
+  function money(v, c) {
+    if (v == null || v === '') return '—';
+    return Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + (CUR[c] || c || '');
+  }
+  function cls(q) { return q <= 0 ? 'out' : q <= LOW ? 'low' : 'ok'; }
+  function hasServer() { return /^https:\/\/script\.google\.com\//.test(API_URL); }
+
+  /* ---- فحص الاتصال عند الفتح ---- */
+  function checkConn() {
+    var c = $('conn');
+    if (!hasServer()) { c.textContent = 'لم يُضبط رابط API_URL في الصفحة'; c.className = 'conn bad'; return; }
+    var done = false;
+    var t = setTimeout(function () {
+      if (done) return;
+      c.textContent = 'لا يوجد رد من الخادم'; c.className = 'conn bad';
+      setMsg('لا يوجد رد من الخادم. افتح الرابط في نافذة Incognito بحساب Google واحد، وتأكد أن النشر New version.', true);
+    }, 15000);
+    api('ping').then(function (r) {
+        done = true; clearTimeout(t);
+        if (r.missing && r.missing.length) {
+          c.textContent = 'إعداد ناقص'; c.className = 'conn bad';
+          setMsg('إعدادات ناقصة في Script Properties: ' + r.missing.join('، '), true);
+        } else { c.textContent = 'متصل ✓ v' + r.version; c.className = 'conn ok'; }
+        })
+      .catch(function (e) {
+        done = true; clearTimeout(t);
+        c.textContent = 'خطأ في الخادم'; c.className = 'conn bad';
+        setMsg((e && e.message) || 'تعذر الاتصال بالخادم.', true);
+      });
+  }
+
+  /* ---- البحث ---- */
+  function search() {
+    clearTimeout(timer);
+    var q = $('q').value.trim();
+    if (!q) return setMsg('أدخل قيمة للبحث.');
+    if (!hasServer()) return setMsg('لم يُضبط رابط API_URL في الصفحة.', true);
+    var id = ++reqId;
+    $('results').innerHTML = ''; setMsg('جاري البحث في Shopify…'); $('goBtn').disabled = true;
+    api('search', q).then(function (data) {
+        if (id !== reqId) return;
+        $('goBtn').disabled = false; render(data);
+        if (data.products.length) addHist(q);
+      })
+      .catch(function (e) {
+        if (id !== reqId) return;
+        $('goBtn').disabled = false; setMsg((e && e.message) || 'تعذر تنفيذ البحث.', true);
+      });
+  }
+
+  function render(data) {
+    if (!data.products.length) {
+      $('results').innerHTML = '<div class="panel empty"><b>لم يتم العثور على منتج</b><br>تحقق من القيمة أو غيّر نوع البحث.</div>';
+      return setMsg('');
+    }
+    $('results').innerHTML = data.products.map(function (p) { return card(p, data.currency); }).join('');
+    setMsg('تم العثور على ' + data.products.length + ' نتيجة.');
+  }
+
+  function card(p, cur) {
+    var img = p.image ? '<img class="pic" src="' + esc(p.image) + '" alt="' + esc(p.imageAlt || p.productTitle) + '">' : '<div class="pic">لا توجد صورة</div>';
+    var price = Number(p.price), cmp = Number(p.compareAtPrice);
+    var disc = cmp > price && price > 0
+      ? '<span class="old">' + esc(money(p.compareAtPrice, cur)) + '</span><span class="off">خصم ' + Math.round((1 - price / cmp) * 100) + '%</span>' : '';
+    var locs = p.locations.length
+      ? p.locations.map(function (l) { return '<div class="loc ' + (cls(l.quantity) === 'ok' ? '' : cls(l.quantity)) + '"><span>' + esc(l.name) + '</span><strong>' + num(l.quantity) + '</strong></div>'; }).join('')
+      : '<div class="loc">لا توجد بيانات مواقع للمخزون.</div>';
+    var s = cls(p.total), label = s === 'out' ? 'غير متوفر' : s === 'low' ? 'مخزون منخفض' : 'متوفر';
+    var vt = p.variantTitle && p.variantTitle !== 'Default Title' ? p.variantTitle : 'المتغيّر الأساسي';
+    var link = p.storeUrl && p.storeUrl.indexOf('https://') === 0 ? '<a class="link" href="' + esc(p.storeUrl) + '" target="_blank" rel="noopener">فتح المنتج في المتجر</a>' : '';
+    return '<article class="panel item">' + img + '<div><h2>' + esc(p.productTitle) + '</h2><p class="var">' + esc(vt) + '</p>' +
+      '<div class="pills"><span class="pill">SKU: ' + esc(p.sku || '—') + '</span><span class="pill">باركود: ' + esc(p.barcode || '—') + '</span>' +
+      '<span class="pill ' + s + '">' + label + ' · الإجمالي ' + num(p.total) + '</span></div>' +
+      '<div class="prices"><span class="price">' + esc(money(p.price, cur)) + '</span>' + disc + '</div>' +
+      '<div class="locs">' + locs + '</div>' + link + '</div></article>';
+  }
+
+  /* ---- السجل المحلي ---- */
+  function getHist() { try { return JSON.parse(localStorage.getItem('ss_hist2') || '[]'); } catch (e) { return []; } }
+  function setHist(l) { try { localStorage.setItem('ss_hist2', JSON.stringify(l)); } catch (e) {} }
+  function addHist(q) {
+    var l = getHist().filter(function (x) { return x !== q; });
+    l.unshift(q); setHist(l.slice(0, 10)); renderHist();
+  }
+  function renderHist() {
+    var l = getHist(), box = $('hist');
+    box.classList.toggle('hidden', !l.length);
+    box.innerHTML = '';
+    if (!l.length) return;
+    var lab = document.createElement('span'); lab.textContent = 'آخر عمليات البحث:'; box.appendChild(lab);
+    l.forEach(function (q) {
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'chip ghost'; b.textContent = q;
+      b.addEventListener('click', function () { $('q').value = q; lastAuto = q; search(); });
+      box.appendChild(b);
+    });
+    var c = document.createElement('button'); c.type = 'button'; c.className = 'chip ghost'; c.textContent = 'مسح';
+    c.addEventListener('click', function () { setHist([]); renderHist(); });
+    box.appendChild(c);
+  }
+
+  function autoSearch() {
+    clearTimeout(timer);
+    var v = $('q').value.trim(), min = /^[A-Za-z0-9._\-\/#]+$/.test(v) ? 5 : 3;
+    if (v.length < min || v === lastAuto) return;
+    timer = setTimeout(function () { if ($('q').value.trim() === v) { lastAuto = v; search(); } }, 800);
+  }
+
+  /* ---- الكاميرا ---- */
+  function camErr(t) { var m = $('camMsg'); m.textContent = t; m.classList.remove('hidden'); }
+  function showPerm(kind, err, retry) {
+    var label = kind === 'camera' ? 'الكاميرا' : 'الميكروفون', n = (err && err.name) || '';
+    var text;
+    if (n === 'NotFoundError' || n === 'DevicesNotFoundError') text = 'لا يوجد جهاز ' + label + ' متاح على هذا الجهاز.';
+    else if (n === 'NotReadableError' || n === 'TrackStartError') text = label + ' مستخدمة حالياً من تطبيق آخر. أغلقه ثم أعد المحاولة.';
+    else text = 'لم يُمنح إذن ' + label + '. اضغط أيقونة القفل بجوار عنوان الصفحة ← الأذونات ← اسمح بـ' + label + '، ثم اضغط «إعادة المحاولة». وإن كنت داخل تطبيق مراسلة فافتح الرابط في المتصفح.';
+    var m = $('camMsg'); m.textContent = text;
+    var box = document.createElement('div'); box.className = 'perm';
+    var again = document.createElement('button'); again.type = 'button'; again.textContent = 'إعادة المحاولة وطلب الإذن';
+    again.addEventListener('click', function () { m.classList.add('hidden'); retry(); });
+    box.appendChild(again);
+    if (appUrl) {
+      var open = document.createElement('a'); open.className = 'alt'; open.href = appUrl; open.target = '_blank'; open.rel = 'noopener'; open.textContent = 'فتح في المتصفح';
+      box.appendChild(open);
+      var copy = document.createElement('button'); copy.type = 'button'; copy.className = 'alt'; copy.textContent = 'نسخ الرابط';
+      copy.addEventListener('click', function () {
+        try { navigator.clipboard.writeText(appUrl).then(function () { copy.textContent = 'تم النسخ ✓'; }); } catch (e) { copy.textContent = appUrl; }
+      });
+      box.appendChild(copy);
+    }
+    m.appendChild(box); m.classList.remove('hidden');
+  }
+  // يطلب إذن الجهاز مباشرة (تظهر نافذة الإذن من المتصفح) ثم يحرر الجهاز.
+  function askPermission(constraints) {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return Promise.resolve();
+    return navigator.mediaDevices.getUserMedia(constraints).then(function (s) { s.getTracks().forEach(function (t) { t.stop(); }); });
+  }
+  function loadZX() {
+    return new Promise(function (res, rej) {
+      if (window.ZXing) return res();
+      var s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/@zxing/library@0.21.3/umd/index.min.js';
+      s.onload = res; s.onerror = function () { rej(new Error('zxing')); };
+      document.head.appendChild(s);
+    });
+  }
+  function openCam() {
+    $('camMsg').classList.add('hidden');
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return camErr('المتصفح لا يدعم الكاميرا. استخدم الإدخال اليدوي.');
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' } }, audio: false }).then(function (s) {
+      stream = s; var v = $('video'); v.srcObject = s;
+      $('scanner').classList.remove('hidden');
+      var p = v.play(); if (p && p.catch) p.catch(function () {});
+      if ('BarcodeDetector' in window) {
+        var det = new BarcodeDetector();
+        var tick = function () {
+          if (!stream) return;
+          det.detect(v).then(function (codes) { if (codes.length) scanned(codes[0].rawValue); else raf = requestAnimationFrame(tick); })
+            .catch(function () { raf = requestAnimationFrame(tick); });
+        };
+        tick();
+      } else {
+        loadZX().then(function () {
+          zx = new ZXing.BrowserMultiFormatReader();
+          zx.decodeFromStream(stream, v, function (r) { if (r) scanned(r.getText()); });
+        }).catch(function () { closeCam(); camErr('تعذر تحميل قارئ الباركود. استخدم الإدخال اليدوي.'); });
+      }
+    }).catch(function (e) {
+      showPerm('camera', e, openCam);
+    });
+  }
+  function scanned(code) {
+    closeCam();
+    $('q').value = code; lastAuto = code;
+    if (navigator.vibrate) navigator.vibrate(80);
+    search();
+  }
+  function closeCam() {
+    cancelAnimationFrame(raf);
+    if (zx) { try { zx.reset(); } catch (e) {} zx = null; }
+    if (stream) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; }
+    $('video').srcObject = null; $('scanner').classList.add('hidden');
+  }
+
+  /* ---- البحث الصوتي ---- */
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition, rec = null, listening = false, heard = '';
+  function fixSpoken(t) {
+    t = t.trim().replace(/[\u0660-\u0669]/g, function (d) { return d.charCodeAt(0) - 0x660; })
+         .replace(/[\u06F0-\u06F9]/g, function (d) { return d.charCodeAt(0) - 0x6F0; })
+         .replace(/[.,،؟?!]+$/, '').trim();
+    return /^[0-9\s]+$/.test(t) ? t.replace(/\s+/g, '') : t;
+  }
+  function toggleVoice() {
+    if (!SR) return camErr('المتصفح لا يدعم البحث الصوتي. استخدم Chrome أو Safari، أو زر الميكروفون في لوحة مفاتيح الجوال.');
+    if (listening && rec) { rec.stop(); return; }
+    askPermission({ audio: true }).then(startVoice).catch(function (e) { showPerm('mic', e, toggleVoice); });
+  }
+  function startVoice() {
+    $('camMsg').classList.add('hidden'); heard = '';
+    rec = new SR(); rec.lang = 'ar-SA'; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+    rec.onstart = function () { listening = true; $('micBtn').classList.add('on'); setMsg('تحدّث الآن…'); };
+    rec.onresult = function (e) {
+      var t = ''; for (var i = 0; i < e.results.length; i++) t += e.results[i][0].transcript + ' ';
+      heard = fixSpoken(t); $('q').value = heard;
+    };
+    rec.onerror = function (e) {
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') showPerm('mic', { name: 'NotAllowedError' }, toggleVoice);
+      else if (e.error === 'no-speech') setMsg('لم أسمع شيئاً. حاول مرة أخرى.');
+      else if (e.error !== 'aborted') setMsg('تعذر التعرف على الصوت (' + e.error + ').', true);
+    };
+    rec.onend = function () {
+      listening = false; $('micBtn').classList.remove('on');
+      if (heard) { lastAuto = heard; search(); }
+    };
+    try { rec.start(); } catch (e) { camErr('تعذر بدء البحث الصوتي.'); }
+  }
+
+  /* ---- طلب الأذونات قبل الاستخدام ---- */
+  function stopStream(s) { s.getTracks().forEach(function (t) { t.stop(); }); }
+  function requestAll() {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return Promise.reject({ name: 'NotSupportedError' });
+    var gm = function (c) { return navigator.mediaDevices.getUserMedia(c).then(stopStream); };
+    return gm({ video: { facingMode: { ideal: 'environment' } }, audio: true }).catch(function (e) {
+      if (e && (e.name === 'NotFoundError' || e.name === 'OverconstrainedError' || e.name === 'DevicesNotFoundError'))
+        return gm({ audio: true }).catch(function () { return gm({ video: true }); });
+      throw e;
+    });
+  }
+  function permState(n) {
+    if (!navigator.permissions || !navigator.permissions.query) return Promise.resolve('unknown');
+    return navigator.permissions.query({ name: n }).then(function (s) { return s.state; }).catch(function () { return 'unknown'; });
+  }
+  function gateDone() { try { localStorage.setItem('ss_perm', '1'); } catch (e) {} $('gate').classList.add('hidden'); }
+  function gateFail(e) {
+    var n = (e && e.name) || '', box = $('gateErr');
+    box.textContent = (n === 'NotFoundError' || n === 'DevicesNotFoundError') ? 'لا توجد كاميرا أو ميكروفون على هذا الجهاز.'
+      : n === 'NotSupportedError' ? 'المتصفح أو طريقة الفتح لا تدعم الأذونات. افتح الرابط في Chrome أو Safari.'
+      : 'لم يُمنح الإذن. اضغط أيقونة القفل بجوار عنوان الصفحة ← الأذونات ← اسمح بالكاميرا والميكروفون، ثم اضغط «السماح». وإن كنت داخل تطبيق مراسلة فافتح الرابط في المتصفح.';
+    if (appUrl) {
+      var a = document.createElement('a'); a.href = appUrl; a.target = '_blank'; a.rel = 'noopener'; a.textContent = ' فتح في المتصفح';
+      a.style.fontWeight = '700'; box.appendChild(document.createElement('br')); box.appendChild(a);
+    }
+    box.classList.remove('hidden');
+  }
+  function maybeGate() {
+    var seen = false; try { seen = localStorage.getItem('ss_perm') === '1'; } catch (e) {}
+    Promise.all([permState('camera'), permState('microphone')]).then(function (s) {
+      if (s[0] === 'granted' && s[1] === 'granted') return;
+      if (seen) return;
+      $('gate').classList.remove('hidden');
+    });
+  }
+  $('gateAllow').addEventListener('click', function () {
+    $('gateErr').classList.add('hidden'); $('gateAllow').disabled = true;
+    requestAll().then(gateDone).catch(gateFail).then(function () { $('gateAllow').disabled = false; });
+  });
+  $('gateSkip').addEventListener('click', gateDone);
+
+  /* ---- تشغيل ---- */
+  $('goBtn').addEventListener('click', search);
+  $('camBtn').addEventListener('click', openCam);
+  $('micBtn').addEventListener('click', toggleVoice);
+  $('closeCam').addEventListener('click', closeCam);
+  $('q').addEventListener('input', autoSearch);
+  $('q').addEventListener('keydown', function (e) { if (e.key === 'Enter') search(); });
+  window.addEventListener('error', function (e) { setMsg('خطأ في الصفحة: ' + (e.message || 'غير معروف'), true); });
+  renderHist(); checkConn(); maybeGate();
+})();
+</script>
+</body>
+</html>
